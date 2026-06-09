@@ -59,19 +59,19 @@ class BeritaController extends Controller
             'gambar'   => 'required|image|mimes:jpeg,png,webp|max:2048',
             'konten'   => 'required'
         ], [
-            'judul.required'    => 'Judul berita tidak boleh kosong.',
-            'judul.max'         => 'Judul maksimal 255 karakter.',
-            'penulis.required'  => 'Nama penulis tidak boleh kosong.',
-            'penulis.regex'     => 'Nama penulis hanya boleh huruf dan spasi.',
-            'kategori.required' => 'Kategori harus dipilih.',
-            'status.required'   => 'Status harus dipilih.',
-            'tanggal.required'  => 'Tanggal rilis tidak boleh kosong.',
+            'judul.required'         => 'Judul berita tidak boleh kosong.',
+            'judul.max'              => 'Judul maksimal 255 karakter.',
+            'penulis.required'       => 'Nama penulis tidak boleh kosong.',
+            'penulis.regex'          => 'Nama penulis hanya boleh huruf dan spasi.',
+            'kategori.required'      => 'Kategori harus dipilih.',
+            'status.required'        => 'Status harus dipilih.',
+            'tanggal.required'       => 'Tanggal rilis tidak boleh kosong.',
             'tanggal.after_or_equal' => 'Tanggal rilis tidak boleh di masa lalu.',
-            'gambar.required'   => 'Gambar thumbnail wajib diunggah.',
-            'gambar.image'      => 'File harus berupa gambar.',
-            'gambar.mimes'      => 'Format gambar harus jpeg, png, atau webp.',
-            'gambar.max'        => 'Ukuran gambar maksimal 2MB.',
-            'konten.required'   => 'Isi berita tidak boleh kosong.',
+            'gambar.required'        => 'Gambar thumbnail wajib diunggah.',
+            'gambar.image'           => 'File harus berupa gambar.',
+            'gambar.mimes'           => 'Format gambar harus jpeg, png, atau webp.',
+            'gambar.max'             => 'Ukuran gambar maksimal 2MB.',
+            'konten.required'        => 'Isi berita tidak boleh kosong.',
         ]);
 
         // Jika validasi gagal dan request dari AJAX, kembalikan JSON daftar error
@@ -82,11 +82,30 @@ class BeritaController extends Controller
             ], 422);
         }
 
-        // --- Logika simpan data tidak diubah sama sekali ---
+        // Upload gambar terlebih dahulu
         $gambarNama = time() . '.' . $request->gambar->extension();
         $request->gambar->move(public_path('assets/images/berita'), $gambarNama);
 
-        Berita::create([
+        // =========================================================
+        // PERBAIKAN TIMEZONE:
+        // $request->tanggal berisi tanggal pilihan user (format: Y-m-d, zona WITA).
+        // Gabungkan dengan jam real-time WITA saat ini, lalu konversi ke UTC
+        // sebelum disimpan ke database — agar Carbon di view bisa menampilkan
+        // waktu WITA yang benar saat membaca kembali dari DB.
+        // =========================================================
+        $nowWita      = \Carbon\Carbon::now(config('app.timezone'));
+        $tanggalRilis = \Carbon\Carbon::createFromFormat(
+                            'Y-m-d',
+                            $request->tanggal,
+                            config('app.timezone')          // baca sebagai WITA
+                        )
+                        ->setTime($nowWita->hour, $nowWita->minute, $nowWita->second)
+                        ->utc();                            // simpan ke DB sebagai UTC
+
+        // Gunakan DB::table()->insert() karena:
+        // 1. $timestamps = false di Model → Eloquent create() tidak mengelola timestamp
+        // 2. created_at tidak ada di $fillable → Berita::create() akan mengabaikannya diam-diam
+        \Illuminate\Support\Facades\DB::table('tb_berita')->insert([
             'judul_berita'     => $request->judul,
             'slug_berita'      => Str::slug($request->judul),
             'id_kategori'      => $request->kategori,
@@ -95,8 +114,8 @@ class BeritaController extends Controller
             'penulis'          => $request->penulis,
             'isi_berita'       => $request->konten,
             'gambar_thumbnail' => $gambarNama,
-            'created_at'       => now(), // now() mengikuti timezone app (Asia/Makassar) dari app.php — konsisten dengan update()
-            // updated_at TIDAK diisi → tetap NULL, berita baru belum pernah diedit
+            'created_at'       => $tanggalRilis->toDateTimeString(),
+            // updated_at sengaja tidak diisi → tetap NULL, berita baru belum pernah diedit
         ]);
 
         // Kembalikan JSON sukses agar AJAX bisa redirect dengan bersih

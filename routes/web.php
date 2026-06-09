@@ -87,3 +87,11 @@ Route::get('/debug-password', function() {
     $user->save();
     return "Password Admin Utama Berhasil Di-hash Sempurna Menjadi: admin123";
 });
+
+Route::get('/debug-timezone', function() {
+    return [
+        'app_timezone' => config('app.timezone'),
+        'now_local'    => \Carbon\Carbon::now()->toDateTimeString(),
+        'now_utc'      => \Carbon\Carbon::now('UTC')->toDateTimeString(),
+    ];
+});

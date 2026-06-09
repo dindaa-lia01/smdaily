@@ -95,7 +95,7 @@ class BeritaController extends Controller
             'penulis'          => $request->penulis,
             'isi_berita'       => $request->konten,
             'gambar_thumbnail' => $gambarNama,
-            'created_at'       => \Carbon\Carbon::now('Asia/Makassar'), // eksplisit timezone WITA agar akurat di Railway
+            'created_at'       => now(), // now() mengikuti timezone app (Asia/Makassar) dari app.php — konsisten dengan update()
             // updated_at TIDAK diisi → tetap NULL, berita baru belum pernah diedit
         ]);
 
